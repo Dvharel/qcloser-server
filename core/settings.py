@@ -15,6 +15,9 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "CHANGE_ME_PLEASE")
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in ("1", "true", "yes")
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
 
+#OpenAi key
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 # Apps
 INSTALLED_APPS = [
     "django.contrib.admin",

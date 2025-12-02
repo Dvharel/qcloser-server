@@ -10,23 +10,27 @@ class CallRecordingSerializer(serializers.ModelSerializer):
             "deal_title",
             "audio_file",
             "status",
+            "transcript",
             "created_at",
         ]
-        read_only_fields = ["id", "status", "created_at"]
+        read_only_fields = ["id", "status", "transcript", "created_at"]
 
-    def create(self, validated_data):
-        request = self.context["request"]
-        user = request.user if request.user.is_authenticated else None
-        org = getattr(user, "org", None) if user else None
 
-        # For now we require a user with org – later we can support service accounts etc.
-        if org is None:
-            raise serializers.ValidationError("User must belong to an organization.")
+class TranscriptionRequestSerializer(serializers.Serializer):
+    """
+    Serializer just for the /transcribe/ action.
+    Shows dropdown in DRF browsable API.
+    """
 
-        recording = CallRecording.objects.create(
-            org=org,
-            uploaded_by=user,
-            status=CallRecording.Status.WAITING_TRANSCRIPTION,
-            **validated_data,
-        )
-        return recording
+    LANGUAGE_CHOICES = [
+        ("auto", "Auto-detect"),
+        ("he", "Hebrew"),
+        ("en", "English"),
+    ]
+
+    language = serializers.ChoiceField(
+        choices=LANGUAGE_CHOICES,
+        required=False,
+        default="auto",
+        help_text="Choose 'Auto-detect', 'Hebrew', or 'English'.",
+    )

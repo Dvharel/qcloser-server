@@ -25,7 +25,7 @@ class CallRecording(models.Model):
     deal_title = models.CharField(
         max_length=255,
         blank=True,
-        help_text="Temporary placeholder until full CRM integration.",
+        help_text="Enter deal name",
     )
 
     # THIS will go to S3 once storage is configured
@@ -34,7 +34,7 @@ class CallRecording(models.Model):
     status = models.CharField(
         max_length=32,
         choices=Status.choices,
-        default=Status.WAITING_TRANSCRIPTION,  # 👈 satisfies 'waiting for transcription'
+        default=Status.WAITING_TRANSCRIPTION,
     )
 
     transcript = models.TextField(blank=True)
