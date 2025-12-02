@@ -11,9 +11,10 @@ class CallRecordingSerializer(serializers.ModelSerializer):
             "audio_file",
             "status",
             "transcript",
+            "golden_nuggets",
             "created_at",
         ]
-        read_only_fields = ["id", "status", "transcript", "created_at"]
+        read_only_fields = ["id", "status", "transcript", "golden_nuggets", "created_at"]
 
 
 class TranscriptionRequestSerializer(serializers.Serializer):

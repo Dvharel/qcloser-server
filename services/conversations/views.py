@@ -89,3 +89,38 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         # return the updated recording using the main serializer
         output_serializer = CallRecordingSerializer(recording)
         return Response(output_serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"])
+    def analyze(self, request, pk=None):
+        """
+        POST /api/recordings/<id>/analyze/
+
+        Uses the existing transcript to generate:
+        - Golden Nuggets
+        - Key patterns
+        - Next conversation recommendation
+        - Closing outlook
+        """
+        recording = self.get_object()
+
+        if recording.status != CallRecording.Status.TRANSCRIBED:
+            return Response(
+                {"detail": "Recording must be in 'transcribed' status before analysis."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            analysis_text = analyze_call_recording(recording)
+        except Exception as e:
+            return Response(
+                {"detail": f"Analysis failed: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        recording.golden_nuggets = analysis_text
+        recording.status = CallRecording.Status.ANALYZED
+        recording.save()
+
+        serializer = CallRecordingSerializer(recording)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
