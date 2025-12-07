@@ -5,6 +5,9 @@ from rest_framework.response import Response
 from .models import CallRecording
 from .serializers import CallRecordingSerializer, TranscriptionRequestSerializer
 from .transcription_service import transcribe_call_recording
+from .analysis_service import analyze_call_recording
+from .followup_service import generate_followup
+
 
 
 class CallRecordingViewSet(viewsets.ModelViewSet):
@@ -123,4 +126,37 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
 
         serializer = CallRecordingSerializer(recording)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"])
+    def followup(self, request, pk=None):
+        """
+        POST /api/recordings/<id>/followup/
+
+        Generates:
+        - A WhatsApp/email-style follow-up message to client
+        - A brief for the salesperson
+        - A closing continuation plan
+        """
+        recording = self.get_object()
+
+        if recording.status != CallRecording.Status.ANALYZED:
+            return Response(
+                {"detail": "Recording must be in 'analyzed' status before generating follow-up."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            followup_text = generate_followup(
+                transcript=recording.transcript,
+                analysis=recording.golden_nuggets
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"Follow-up generation failed: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Save followup text into a new field later (MVP will add fields)
+        # For the POC, return it directly
+        return Response({"followup": followup_text}, status=status.HTTP_200_OK)
 
