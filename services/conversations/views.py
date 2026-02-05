@@ -19,7 +19,10 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         parsers.FormParser,
     ]
 
-    def get_queryset(self):
+    def get_queryset_by_org(self):
+        """
+        Returns only the recording that belongs to a user organization.
+        """
         user = self.request.user
         org = getattr(user, "org", None)
         if not org:
@@ -27,6 +30,12 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         return CallRecording.objects.filter(org=org).order_by("-created_at")
 
     def perform_create(self, serializer):
+        """
+        Attach org + user to the recording on creation.
+
+        - Only allow uploads from users who belong to an organization.
+        - Automatically set: org, uploaded_by, and initial status.
+        """
         user = self.request.user
         org = getattr(user, "org", None)
 
@@ -159,4 +168,3 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         # Save followup text into a new field later (MVP will add fields)
         # For the POC, return it directly
         return Response({"followup": followup_text}, status=status.HTTP_200_OK)
-

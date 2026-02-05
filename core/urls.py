@@ -18,7 +18,7 @@ router.register("recordings", CallRecordingViewSet, basename="recording")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/ping/", ping),
-    path("api/", include(router.urls)),
+    path("api/ping/", ping), # simple endpoint to check if the backend is responding (for deployment in AWS / Docker / Render / Railway)
+    path("api/", include(router.urls)), # DRF generates GET,POST,PATCH... routes for recordings. bc of router
 
 ]

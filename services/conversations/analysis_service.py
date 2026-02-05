@@ -9,7 +9,7 @@ from .models import CallRecording
 
 client = OpenAI()
 
-# 🔹 Generic, neutral B2C sales guidelines for POC
+# Generic, neutral B2C sales guidelines for POC
 BASE_SALES_GUIDELINES = """
 You are analyzing a B2C sales conversation (seller talking to an individual consumer).
 
