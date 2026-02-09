@@ -19,9 +19,9 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         parsers.FormParser,
     ]
 
-    def get_queryset_by_org(self):
+    def get_queryset(self):
         """
-        Returns only the recording that belongs to a user organization.
+        Returns only recordings that belong to the request user's organization.
         """
         user = self.request.user
         org = getattr(user, "org", None)
