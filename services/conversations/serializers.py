@@ -3,6 +3,9 @@ from .models import CallRecording
 
 
 class CallRecordingSerializer(serializers.ModelSerializer):
+    transcript_ready = serializers.SerializerMethodField()
+    transcript_url = serializers.SerializerMethodField()
+
     class Meta:
         model = CallRecording
         fields = [
@@ -13,9 +16,30 @@ class CallRecordingSerializer(serializers.ModelSerializer):
             "transcript",
             "golden_nuggets",
             "created_at",
-        ]
-        read_only_fields = ["id", "status", "transcript", "golden_nuggets", "created_at"]
 
+            # new / helpful
+            "transcription_job_id",
+            "transcript_ready",
+            "transcript_url",
+        ]
+        read_only_fields = [
+            "status",
+            "transcript",
+            "golden_nuggets",
+            "created_at",
+            "transcription_job_id",
+            "transcript_ready",
+            "transcript_url",
+        ]
+
+    def get_transcript_ready(self, obj):
+            return obj.status == CallRecording.Status.TRANSCRIBED
+
+    def get_transcript_url(self, obj):
+            request = self.context.get("request")
+            if not request:
+                return None
+            return request.build_absolute_uri(f"/api/recordings/{obj.id}/transcribe/")
 
 class TranscriptionRequestSerializer(serializers.Serializer):
     """

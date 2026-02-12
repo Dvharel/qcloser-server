@@ -18,6 +18,10 @@ ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost
 #OpenAi key
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+#AssemblyAi key
+ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
+ASSEMBLYAI_BASE_URL = os.getenv("ASSEMBLYAI_BASE_URL", "https://api.assemblyai.com")
+
 # Apps
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -39,6 +43,8 @@ INSTALLED_APPS = [
 ]
 
 AUTH_USER_MODEL = "accounts.User"
+
+
 
 # Middleware
 MIDDLEWARE = [

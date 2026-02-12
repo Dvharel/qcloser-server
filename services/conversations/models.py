@@ -38,6 +38,9 @@ class CallRecording(models.Model):
     )
 
     transcript = models.TextField(blank=True)
+
+    transcription_job_id = models.CharField(max_length=128, blank=True)
+    transcript_json = models.JSONField(null=True, blank=True)
     golden_nuggets = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
