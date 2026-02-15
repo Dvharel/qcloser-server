@@ -12,6 +12,7 @@ class CallRecordingSerializer(serializers.ModelSerializer):
             "id",
             "deal_title",
             "audio_file",
+            "language",
             "status",
             "transcript",
             "golden_nuggets",
@@ -39,11 +40,11 @@ class CallRecordingSerializer(serializers.ModelSerializer):
             request = self.context.get("request")
             if not request:
                 return None
-            return request.build_absolute_uri(f"/api/recordings/{obj.id}/transcribe/")
+            return request.build_absolute_uri(f"/api/recordings/{obj.id}/transcript/")
 
 class TranscriptionRequestSerializer(serializers.Serializer):
     """
-    Serializer just for the /transcribe/ action.
+    Serializer just for the /transcript/ action.
     Shows dropdown in DRF browsable API.
     """
 

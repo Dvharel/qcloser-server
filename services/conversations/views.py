@@ -4,7 +4,7 @@ from rest_framework.response import Response
 
 from .models import CallRecording
 from .serializers import CallRecordingSerializer
-from .transcription_service import submit_transcription, poll_transcription, format_speaker_transcript
+from .transcription_service import submit_transcription, poll_transcription, format_speaker_transcript, compact_utterances
 from .analysis_service import analyze_call_recording
 from .followup_service import generate_followup
 
@@ -42,16 +42,20 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
             status=CallRecording.Status.WAITING_TRANSCRIPTION,
         )
 
+        language_code = recording.language
+        if language_code == CallRecording.Language.AUTO:
+            language_code = None
+
         # Auto-submit async transcription job (POC behavior)
         try:
-            result = submit_transcription(recording)  # {"id": "...", "status": "queued"}
+            result = submit_transcription(recording, language_code=language_code)
             recording.transcription_job_id = result["id"]
             recording.save(update_fields=["transcription_job_id"])
         except Exception as e:
             print("AssemblyAI submit failed:", e)
 
      # ---------- TRANSCRIBE ACTION (POST submit, GET poll) ----------
-    @action(detail=True, methods=["get"], url_path="transcribe")
+    @action(detail=True, methods=["get"], url_path="transcript")
     def transcribe(self, request, pk=None):
         """
         GET /api/recordings/<id>/transcript/
@@ -69,7 +73,7 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
                 {
                     "state": "completed",
                     "transcript": recording.transcript,
-                    "utterances": (recording.transcript_json or {}).get("utterances", []),
+                    "utterances": compact_utterances(recording.transcript_json or {}),
                 },
                 status=status.HTTP_200_OK,
             )
@@ -115,7 +119,7 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["get", "post"])
     def analyze(self, request, pk=None):
         """
         POST /api/recordings/<id>/analyze/
@@ -126,6 +130,13 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         - Next conversation recommendation
         - Closing outlook
         """
+
+        if request.method == "GET":
+            return Response(
+                {"detail": "Send POST to this endpoint to start analysis."},
+                status=status.HTTP_200_OK
+            )
+
         recording = self.get_object()
 
         if recording.status != CallRecording.Status.TRANSCRIBED:
@@ -159,6 +170,13 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         - A brief for the salesperson
         - A closing continuation plan
         """
+
+        if request.method == "GET":
+            return Response(
+                {"detail": "Send POST to this endpoint to start analysis."},
+                status=status.HTTP_200_OK
+            )
+
         recording = self.get_object()
 
         if recording.status != CallRecording.Status.ANALYZED:
@@ -181,3 +199,4 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         # Save followup text into a new field later (MVP will add fields)
         # For the POC, return it directly
         return Response({"followup": followup_text}, status=status.HTTP_200_OK)
+

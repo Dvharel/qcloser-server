@@ -48,5 +48,16 @@ class CallRecording(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
+    class Language(models.TextChoices):
+        AUTO = "auto", "Auto-detect"
+        HE = "he", "Hebrew"
+        EN = "en", "English"
+
+    language = models.CharField(
+        max_length=8,
+        choices=Language.choices,
+        default=Language.AUTO,
+    )
+
     def __str__(self) -> str:
         return f"Call #{self.id} ({self.get_status_display()})"
