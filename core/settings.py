@@ -13,12 +13,19 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 # Security / Core
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "CHANGE_ME_PLEASE")
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in ("1", "true", "yes")
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
 
-#OpenAi key
+AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://ai:8001")
+AI_SERVICE_TOKEN = os.getenv("AI_SERVICE_TOKEN", "")
+
+# OpenAi key
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-#AssemblyAi key
+# AssemblyAi key
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 ASSEMBLYAI_BASE_URL = os.getenv("ASSEMBLYAI_BASE_URL", "https://api.assemblyai.com")
 
@@ -30,20 +37,16 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
     # Third-party
     "corsheaders",
     "rest_framework",
     "storages",
-
     # Local apps
     "services.accounts",
     "services.conversations",
-
 ]
 
 AUTH_USER_MODEL = "accounts.User"
-
 
 
 # Middleware
@@ -104,7 +107,9 @@ else:
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -133,11 +138,15 @@ STATIC_URL = "/static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS/CSRF (optional)
-CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+CORS_ALLOWED_ORIGINS = [
+    o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
 if DEBUG and not CORS_ALLOWED_ORIGINS:
     CORS_ALLOW_ALL_ORIGINS = True
 
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
+]
 
 # Security hardening for prod
 if not DEBUG:
@@ -158,7 +167,9 @@ if USE_S3:
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME")
-    AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "eu-central-1")  # e.g. Frankfurt, change if needed
+    AWS_S3_REGION_NAME = os.getenv(
+        "AWS_S3_REGION_NAME", "eu-central-1"
+    )  # e.g. Frankfurt, change if needed
 
     AWS_S3_ADDRESSING_STYLE = "virtual"
     AWS_DEFAULT_ACL = None
