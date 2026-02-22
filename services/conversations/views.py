@@ -11,10 +11,12 @@ from .transcription_service import (
     format_speaker_transcript,
     compact_utterances,
 )
-from .analysis_service import analyze_call_recording
-from .followup_service import generate_followup
 
-from services.conversations.ai_client import analyze_via_ai_service
+from services.conversations.ai_client import (
+    analyze_via_ai_service,
+    generate_followup_via_ai_service,
+    feedback_via_ai_service,
+)
 
 
 class CallRecordingViewSet(viewsets.ModelViewSet):
@@ -171,14 +173,18 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
 
         if not recording.transcript:
             return Response(
-                {"detail": "No transcript found. Run transcript first."},
+                {
+                    "detail": "Error in analyze -> No transcript found. Run transcript first."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             result = analyze_via_ai_service(
                 transcript=recording.transcript,
-                language=getattr(recording, "language", None),
+                language=recording.language,
+                org_id=recording.org_id,
+                recording_id=recording.id,
             )
         except Exception as e:
             return Response(
@@ -186,7 +192,6 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        # You currently store golden_nuggets as TextField.
         # So for now we serialize the structured response into a readable string.
         # Later: store JSON in a JSONField.
         analysis_text = (
@@ -203,9 +208,67 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
             + f"Reason: {result.get('closing_outlook', {}).get('reason')}"
         ).strip()
 
-        recording.golden_nuggets = analysis_text
+        recording.analysis_text = analysis_text
         recording.status = CallRecording.Status.ANALYZED
-        recording.save(update_fields=["golden_nuggets", "status"])
+        recording.save(update_fields=["analysis_text", "status"])
+
+        return Response(
+            CallRecordingSerializer(recording, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["get", "post"])
+    def feedback(self, request, pk=None):
+        if request.method == "GET":
+            return Response(
+                {"detail": "Click POST to generate feedback."},
+                status=status.HTTP_200_OK,
+            )
+
+        recording = self.get_object()
+
+        if recording.status != CallRecording.Status.ANALYZED:
+            return Response(
+                {"detail": "Recording must be in 'analyzed' status before feedback."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not recording.transcript:
+            return Response(
+                {"detail": "Error in feedback -> No transcript found."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            result = feedback_via_ai_service(
+                transcript=recording.transcript,
+                language=recording.language,
+                org_id=recording.org_id,
+                recording_id=recording.id,
+                analysis_text=recording.analysis_text,
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"AI service feedback failed: {e}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # IMPORTANT: Make sure the key matches what FastAPI returns
+
+        feedback_text = (result.get("feedback_text") or "").strip()
+
+        if not feedback_text:
+            return Response(
+                {
+                    "detail": f"FastAPI returned empty feedback. Keys: {list(result.keys())}",
+                    "raw": result,
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        recording.feedback_text = feedback_text
+        recording.status = CallRecording.Status.FEEDBACK_READY
+        recording.save(update_fields=["feedback_text", "status"])
 
         return Response(
             CallRecordingSerializer(recording, context={"request": request}).data,
@@ -215,40 +278,54 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get", "post"])
     def followup(self, request, pk=None):
         """
-        POST /api/recordings/<id>/followup/
-
-        Generates:
-        - A WhatsApp/email-style follow-up message to client
-        - A brief for the salesperson
-        - A closing continuation plan
+        GET  /api/recordings/<id>/followup/  -> tells user to press POST
+        POST /api/recordings/<id>/followup/  -> calls FastAPI /followup and saves result
         """
 
         if request.method == "GET":
             return Response(
-                {"detail": "Send POST to this endpoint to start followup."},
+                {"detail": "Click POST to generate follow-up."},
                 status=status.HTTP_200_OK,
             )
 
         recording = self.get_object()
 
-        if recording.status != CallRecording.Status.ANALYZED:
+        # For now (until you add statuses), keep this check:
+        if recording.status != CallRecording.Status.FEEDBACK_READY:
+            return Response(
+                {"detail": "Feedback must be ready before follow-up."}, status=400
+            )
+
+        if not recording.transcript:
             return Response(
                 {
-                    "detail": "Recording must be in 'analyzed' status before generating follow-up."
+                    "detail": "Error in followup -> No transcript found. Run transcript first."
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        analysis_payload = recording.analysis_text
+
         try:
-            followup_text = generate_followup(
-                transcript=recording.transcript, analysis=recording.golden_nuggets
+            result = generate_followup_via_ai_service(
+                recording_id=recording.id,
+                transcript=recording.transcript,
+                analysis_text=analysis_payload,
+                language=getattr(recording, "language", "auto") or "auto",
+                channel=request.data.get("channel", "whatsapp"),
+                tone=request.data.get("tone", "friendly"),
             )
         except Exception as e:
             return Response(
-                {"detail": f"Follow-up generation failed: {e}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                {"detail": f"AI service follow-up failed: {e}"},
+                status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        # Save followup text into a new field later (MVP will add fields)
-        # For the POC, return it directly
-        return Response({"followup": followup_text}, status=status.HTTP_200_OK)
+        followup_json = result.get("followup_json") or result.get("followup") or ""
+        recording.followup_json = followup_json
+        recording.save(update_fields=["followup_json"])
+
+        return Response(
+            CallRecordingSerializer(recording, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )

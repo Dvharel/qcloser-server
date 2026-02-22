@@ -2,6 +2,8 @@ from openai import OpenAI
 
 client = OpenAI()
 
+# this file can be debited. but first finish the ai followup by langraph
+
 BASE_FOLLOWUP_GUIDELINES = """
 You are helping a B2C sales representative follow up after a phone call.
 Create communication that is:
@@ -10,6 +12,7 @@ Create communication that is:
 - Avoids pressure or pushiness.
 - Highlights value, benefits, or progress.
 """
+
 
 def build_followup_prompt(transcript: str, analysis: str):
     return f"""

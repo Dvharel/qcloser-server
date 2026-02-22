@@ -2,11 +2,20 @@ from django.db import models
 
 from services.accounts.models import Organization, User
 
+
 class CallRecording(models.Model):
     class Status(models.TextChoices):
-        WAITING_TRANSCRIPTION = "waiting_transcription", "Waiting for transcription"
-        TRANSCRIBED = "transcribed", "Transcribed"
-        ANALYZED = "analyzed", "Analyzed"
+        WAITING_TRANSCRIPTION = "waiting_transcription"
+        TRANSCRIBING = "transcribing"
+        TRANSCRIBED = "transcribed"
+        ANALYZING = "analyzing"
+        ANALYZED = "analyzed"
+        GENERATING_FEEDBACK = "generating_feedback"
+        FEEDBACK_READY = "feedback_ready"
+        GENERATING_FOLLOWUP = "generating_followup"
+        FOLLOWUP_READY = "followup_ready"
+        DONE = "done"
+        FAILED = "failed"
 
     org = models.ForeignKey(
         Organization,
@@ -32,16 +41,20 @@ class CallRecording(models.Model):
     audio_file = models.FileField(upload_to="call_recordings/")
 
     status = models.CharField(
-        max_length=32,
+        max_length=64,
         choices=Status.choices,
         default=Status.WAITING_TRANSCRIPTION,
     )
 
-    transcript = models.TextField(blank=True)
+    transcript = models.TextField(blank=True, default="")
 
     transcription_job_id = models.CharField(max_length=128, blank=True)
     transcript_json = models.JSONField(null=True, blank=True)
-    golden_nuggets = models.TextField(blank=True)
+    analysis_text = models.TextField(blank=True, default="")
+    feedback_text = models.TextField(blank=True, default="")
+    followup_json = models.JSONField(null=True, blank=True)
+    error_stage = models.CharField(max_length=64, null=True, blank=True)
+    error_message = models.TextField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -57,6 +70,7 @@ class CallRecording(models.Model):
         max_length=8,
         choices=Language.choices,
         default=Language.AUTO,
+        blank=True,
     )
 
     def __str__(self) -> str:

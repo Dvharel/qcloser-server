@@ -9,6 +9,9 @@ from .models import CallRecording
 
 client = OpenAI()
 
+# this file can be debited. but first finish the ai analysis by langraph
+
+
 # Generic, neutral B2C sales guidelines for POC
 BASE_SALES_GUIDELINES = """
 You are analyzing a B2C sales conversation (seller talking to an individual consumer).

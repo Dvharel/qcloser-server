@@ -15,48 +15,47 @@ class CallRecordingSerializer(serializers.ModelSerializer):
             "language",
             "status",
             "transcript",
-            "golden_nuggets",
             "created_at",
-
-            # new / helpful
+            # pipeline / debug
             "transcription_job_id",
+            "analysis_text",
+            "feedback_text",
+            "followup_json",
+            "error_stage",
+            "error_message",
+            # helpers
             "transcript_ready",
             "transcript_url",
         ]
         read_only_fields = [
             "status",
             "transcript",
-            "golden_nuggets",
             "created_at",
             "transcription_job_id",
+            "analysis_text",
+            "feedback_text",
+            "followup_json",
+            "error_stage",
+            "error_message",
             "transcript_ready",
             "transcript_url",
         ]
 
     def get_transcript_ready(self, obj):
-            return obj.status == CallRecording.Status.TRANSCRIBED
+        # אם מבחינתך "מוכן" כולל גם מעבר לשלבים מתקדמים:
+        return obj.status in (
+            CallRecording.Status.TRANSCRIBED,
+            CallRecording.Status.ANALYZING,
+            CallRecording.Status.ANALYZED,
+            CallRecording.Status.GENERATING_FEEDBACK,
+            CallRecording.Status.FEEDBACK_READY,
+            CallRecording.Status.GENERATING_FOLLOWUP,
+            CallRecording.Status.FOLLOWUP_READY,
+            CallRecording.Status.DONE,
+        )
 
     def get_transcript_url(self, obj):
-            request = self.context.get("request")
-            if not request:
-                return None
-            return request.build_absolute_uri(f"/api/recordings/{obj.id}/transcript/")
-
-class TranscriptionRequestSerializer(serializers.Serializer):
-    """
-    Serializer just for the /transcript/ action.
-    Shows dropdown in DRF browsable API.
-    """
-
-    LANGUAGE_CHOICES = [
-        ("auto", "Auto-detect"),
-        ("he", "Hebrew"),
-        ("en", "English"),
-    ]
-
-    language = serializers.ChoiceField(
-        choices=LANGUAGE_CHOICES,
-        required=False,
-        default="auto",
-        help_text="Choose 'Auto-detect', 'Hebrew', or 'English'.",
-    )
+        request = self.context.get("request")
+        if not request:
+            return None
+        return request.build_absolute_uri(f"/api/recordings/{obj.id}/transcript/")
