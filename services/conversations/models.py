@@ -50,8 +50,8 @@ class CallRecording(models.Model):
 
     transcription_job_id = models.CharField(max_length=128, blank=True)
     transcript_json = models.JSONField(null=True, blank=True)
-    analysis_text = models.TextField(blank=True, default="")
-    feedback_text = models.TextField(blank=True, default="")
+    analysis_json = models.JSONField(null=True, blank=True)
+    feedback_json = models.JSONField(null=True, blank=True)
     followup_json = models.JSONField(null=True, blank=True)
     error_stage = models.CharField(max_length=64, null=True, blank=True)
     error_message = models.TextField(null=True, blank=True)

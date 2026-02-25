@@ -3,8 +3,12 @@ import time
 import requests
 from django.conf import settings
 
-BASE_URL = getattr(settings, "ASSEMBLYAI_BASE_URL", "https://api.assemblyai.com").rstrip("/")
+BASE_URL = getattr(
+    settings, "ASSEMBLYAI_BASE_URL", "https://api.assemblyai.com"
+).rstrip("/")
 HEADERS = {"Authorization": settings.ASSEMBLYAI_API_KEY}
+if not settings.ASSEMBLYAI_API_KEY:
+    raise RuntimeError("ASSEMBLYAI_API_KEY is missing from environment")
 
 
 class AssemblyAIError(RuntimeError):
@@ -82,7 +86,9 @@ def poll_transcription(transcript_id: str) -> dict:
     Async step 2: poll transcript status.
     Returns full transcript JSON when completed, or status if still processing.
     """
-    resp = requests.get(f"{BASE_URL}/v2/transcript/{transcript_id}", headers=HEADERS, timeout=30)
+    resp = requests.get(
+        f"{BASE_URL}/v2/transcript/{transcript_id}", headers=HEADERS, timeout=30
+    )
     resp.raise_for_status()
     data = resp.json()
 
@@ -108,6 +114,7 @@ def format_speaker_transcript(transcript_json: dict) -> str:
             lines.append(f"Speaker {speaker}: {text}")
     return "\n".join(lines).strip()
 
+
 def compact_utterances(transcript_json: dict) -> list:
     """
     Return utterances without word-level details (keeps response small).
@@ -115,11 +122,13 @@ def compact_utterances(transcript_json: dict) -> list:
     utterances = transcript_json.get("utterances") or []
     compact = []
     for u in utterances:
-        compact.append({
-            "speaker": u.get("speaker"),
-            "text": u.get("text"),
-            "start": u.get("start"),
-            "end": u.get("end"),
-            "confidence": u.get("confidence"),
-        })
+        compact.append(
+            {
+                "speaker": u.get("speaker"),
+                "text": u.get("text"),
+                "start": u.get("start"),
+                "end": u.get("end"),
+                "confidence": u.get("confidence"),
+            }
+        )
     return compact

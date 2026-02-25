@@ -3,6 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 
+from langdetect import detect
+
+
 from .models import CallRecording
 from .serializers import CallRecordingSerializer
 from .transcription_service import (
@@ -124,8 +127,18 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
                 format_speaker_transcript(data) or (data.get("text") or "").strip()
             )
             recording.status = CallRecording.Status.TRANSCRIBED
-            recording.save(update_fields=["transcript_json", "transcript", "status"])
+            text = (recording.transcript or "").strip()
+            if text:
+                try:
+                    recording.language = "he" if detect(text) == "he" else "en"
+                except Exception:
+                    recording.language = "auto"
+            else:
+                recording.language = "auto"
 
+            recording.save(
+                update_fields=["transcript_json", "transcript", "status", "language"]
+            )
             clean_utterances = []
             for u in data.get("utterances") or []:
                 clean_utterances.append(
@@ -183,34 +196,20 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
             result = analyze_via_ai_service(
                 transcript=recording.transcript,
                 language=recording.language,
-                org_id=recording.org_id,
+                deal_title=recording.deal_title,
                 recording_id=recording.id,
             )
         except Exception as e:
             return Response(
-                {"detail": f"AI service analysis failed: {e}"},
+                {
+                    "detail": f"AI service analysis failed: {e} \n(analyze_via_ai_service)"
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        # So for now we serialize the structured response into a readable string.
-        # Later: store JSON in a JSONField.
-        analysis_text = (
-            "## Golden Nuggets\n"
-            + "\n".join(f"- {x}" for x in result.get("nuggets", []))
-            + "\n\n## Patterns\n"
-            + "\n".join(f"- {x}" for x in result.get("patterns", []))
-            + "\n\n## Risks\n"
-            + "\n".join(f"- {x}" for x in result.get("risks", []))
-            + "\n\n## Next Questions\n"
-            + "\n".join(f"- {x}" for x in result.get("next_questions", []))
-            + "\n\n## Closing Outlook\n"
-            + f"Score: {result.get('closing_outlook', {}).get('score')}\n"
-            + f"Reason: {result.get('closing_outlook', {}).get('reason')}"
-        ).strip()
-
-        recording.analysis_text = analysis_text
+        recording.analysis_json = result.get("analysis_json") or result
         recording.status = CallRecording.Status.ANALYZED
-        recording.save(update_fields=["analysis_text", "status"])
+        recording.save(update_fields=["analysis_json", "status"])
 
         return Response(
             CallRecordingSerializer(recording, context={"request": request}).data,
@@ -243,21 +242,23 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
             result = feedback_via_ai_service(
                 transcript=recording.transcript,
                 language=recording.language,
-                org_id=recording.org_id,
+                deal_title=recording.deal_title,
                 recording_id=recording.id,
-                analysis_text=recording.analysis_text,
+                analysis_json=recording.analysis_json,
             )
         except Exception as e:
             return Response(
-                {"detail": f"AI service feedback failed: {e}"},
+                {
+                    "detail": f"AI service feedback failed: {e} \n(feedback_via_ai_service)"
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
         # IMPORTANT: Make sure the key matches what FastAPI returns
 
-        feedback_text = (result.get("feedback_text") or "").strip()
+        feedback_json = result.get("feedback_json") or ""
 
-        if not feedback_text:
+        if not feedback_json:
             return Response(
                 {
                     "detail": f"FastAPI returned empty feedback. Keys: {list(result.keys())}",
@@ -266,9 +267,9 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
-        recording.feedback_text = feedback_text
+        recording.feedback_json = feedback_json
         recording.status = CallRecording.Status.FEEDBACK_READY
-        recording.save(update_fields=["feedback_text", "status"])
+        recording.save(update_fields=["feedback_json", "status"])
 
         return Response(
             CallRecordingSerializer(recording, context={"request": request}).data,
@@ -304,20 +305,23 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        analysis_payload = recording.analysis_text
+        analysis_payload = recording.analysis_json
 
         try:
             result = generate_followup_via_ai_service(
                 recording_id=recording.id,
                 transcript=recording.transcript,
-                analysis_text=analysis_payload,
+                deal_title=recording.deal_title,
+                analysis_json=analysis_payload,
                 language=getattr(recording, "language", "auto") or "auto",
                 channel=request.data.get("channel", "whatsapp"),
                 tone=request.data.get("tone", "friendly"),
             )
         except Exception as e:
             return Response(
-                {"detail": f"AI service follow-up failed: {e}"},
+                {
+                    "detail": f"AI service follow-up failed: {e} \n(generate_followup_via_ai_service)"
+                },
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 

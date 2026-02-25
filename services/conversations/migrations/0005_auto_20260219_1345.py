@@ -6,52 +6,73 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('conversations', '0004_callrecording_followup_text'),
+        ("conversations", "0004_callrecording_followup_text"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='callrecording',
-            name='golden_nuggets',
+            model_name="callrecording",
+            name="golden_nuggets",
         ),
         migrations.AddField(
-            model_name='callrecording',
-            name='analysis_text',
-            field=models.TextField(blank=True, default=''),
+            model_name="callrecording",
+            name="analysis_text",
+            field=models.TextField(blank=True, default=""),
         ),
         migrations.AddField(
-            model_name='callrecording',
-            name='error_message',
+            model_name="callrecording",
+            name="error_message",
             field=models.TextField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='callrecording',
-            name='error_stage',
+            model_name="callrecording",
+            name="error_stage",
             field=models.CharField(blank=True, max_length=64, null=True),
         ),
         migrations.AddField(
-            model_name='callrecording',
-            name='feedback_text',
-            field=models.TextField(blank=True, default=''),
+            model_name="callrecording",
+            name="feedback_text",
+            field=models.TextField(blank=True, default=""),
         ),
         migrations.AddField(
-            model_name='callrecording',
-            name='followup_json',
+            model_name="callrecording",
+            name="followup_json",
             field=models.JSONField(blank=True, null=True),
         ),
         migrations.AlterField(
-            model_name='callrecording',
-            name='language',
-            field=models.CharField(blank=True, choices=[('auto', 'Auto-detect'), ('he', 'Hebrew'), ('en', 'English')], default='auto', max_length=8),
+            model_name="callrecording",
+            name="language",
+            field=models.CharField(
+                blank=True,
+                choices=[("auto", "Auto-detect"), ("he", "Hebrew"), ("en", "English")],
+                default="auto",
+                max_length=8,
+            ),
         ),
         migrations.AlterField(
-            model_name='callrecording',
-            name='status',
-            field=models.CharField(choices=[('waiting_transcription', 'Waiting Transcription'), ('transcribing', 'Transcribing'), ('transcribed', 'Transcribed'), ('analyzing', 'Analyzing'), ('analyzed', 'Analyzed'), ('generating_feedback', 'Generating Feedback'), ('feedback_ready', 'Feedback Ready'), ('generating_followup', 'Generating Followup'), ('followup_ready', 'Followup Ready'), ('done', 'Done'), ('failed', 'Failed')], default='waiting_transcription', max_length=64),
+            model_name="callrecording",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("waiting_transcription", "Waiting Transcription"),
+                    ("transcribing", "Transcribing"),
+                    ("transcribed", "Transcribed"),
+                    ("analyzing", "Analyzing"),
+                    ("analyzed", "Analyzed"),
+                    ("generating_feedback", "Generating Feedback"),
+                    ("feedback_ready", "Feedback Ready"),
+                    ("generating_followup", "Generating Followup"),
+                    ("followup_ready", "Followup Ready"),
+                    ("done", "Done"),
+                    ("failed", "Failed"),
+                ],
+                default="waiting_transcription",
+                max_length=64,
+            ),
         ),
         migrations.AlterField(
-            model_name='callrecording',
-            name='transcript',
-            field=models.TextField(blank=True, default=''),
+            model_name="callrecording",
+            name="transcript",
+            field=models.TextField(blank=True, default=""),
         ),
     ]

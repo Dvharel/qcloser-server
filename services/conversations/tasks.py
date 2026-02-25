@@ -53,7 +53,7 @@ def run_langgraph_pipeline(recording_id: int):
     rec = CallRecording.objects.get(id=recording_id)
 
     # -------- ANALYZE (idempotent) --------
-    if not rec.analysis_text:
+    if not rec.analysis_json:
         try:
             rec.status = CallRecording.Status.ANALYZING
             rec.save(update_fields=["status"])
@@ -65,9 +65,9 @@ def run_langgraph_pipeline(recording_id: int):
                 recording_id=rec.id,
             )
 
-            rec.analysis_text = out["analysis_text"]
+            rec.analysis_json = out["analysis_json"]
             rec.status = CallRecording.Status.ANALYZED
-            rec.save(update_fields=["analysis_text", "status"])
+            rec.save(update_fields=["analysis_json", "status"])
 
         except Exception as e:
             rec.status = CallRecording.Status.FAILED
@@ -77,21 +77,21 @@ def run_langgraph_pipeline(recording_id: int):
             return
 
     # -------- FEEDBACK (idempotent, failure doesn't stop followup) --------
-    if not rec.feedback_text:
+    if not rec.feedback_json:
         try:
             rec.status = CallRecording.Status.GENERATING_FEEDBACK
             rec.save(update_fields=["status"])
 
             out = feedback_via_ai_service(
                 transcript=rec.transcript,
-                analysis_text=rec.analysis_text,
+                analysis_json=rec.analysis_json,
                 language=rec.language,
                 recording_id=rec.id,
             )
 
-            rec.feedback_text = out["feedback_text"]
+            rec.feedback_json = out["feedback_json"]
             rec.status = CallRecording.Status.FEEDBACK_READY
-            rec.save(update_fields=["feedback_text", "status"])
+            rec.save(update_fields=["feedback_json", "status"])
 
         except Exception as e:
             # log error but continue
@@ -106,9 +106,11 @@ def run_langgraph_pipeline(recording_id: int):
             rec.save(update_fields=["status"])
 
             out = generate_followup_via_ai_service(
+                rec.org_id,
+                recording_id=rec.id,
                 transcript=rec.transcript,
-                analysis_text=rec.analysis_text,
-                feedback_text=rec.feedback_text,
+                analysis_json=rec.analysis_json,
+                feedback_json=rec.feedback_json,
                 language=rec.language,
                 recording_id=rec.id,
             )

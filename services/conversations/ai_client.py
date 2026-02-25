@@ -15,13 +15,13 @@ def _headers():
 
 
 def analyze_via_ai_service(
-    *, transcript: str, language: str, org_id: int, recording_id: int
+    *, transcript: str, language: str, deal_title: str, recording_id: int
 ):
     payload = {
+        "recording_id": recording_id,
         "transcript": transcript,
         "language": language or "auto",
-        "org_id": org_id,
-        "recording_id": recording_id,
+        "deal_title": deal_title,
     }
     r = requests.post(
         f"{AI_URL}/analyze", json=payload, headers=_headers(), timeout=120
@@ -34,16 +34,16 @@ def feedback_via_ai_service(
     *,
     transcript: str,
     language: str,
-    org_id: int,
+    deal_title: str,
     recording_id: int,
-    analysis_text: str | None = None,
+    analysis_json: dict | None = None,
 ):
     payload = {
         "transcript": transcript,
         "language": language or "auto",
-        "org_id": org_id,
+        "deal_title": deal_title,
         "recording_id": recording_id,
-        "analysis_text": analysis_text,
+        "analysis_json": analysis_json,
     }
     r = requests.post(
         f"{AI_URL}/feedback", json=payload, headers=_headers(), timeout=120
@@ -56,7 +56,8 @@ def generate_followup_via_ai_service(
     *,
     recording_id: int,
     transcript: str,
-    analysis_text: dict | str,
+    deal_title: str,
+    analysis_json: dict | str,
     language: str = "auto",
     channel: str = "whatsapp",
     tone: str = "friendly",
@@ -67,7 +68,8 @@ def generate_followup_via_ai_service(
     payload = {
         "recording_id": recording_id,
         "transcript": transcript,
-        "analysis_text": analysis_text,
+        "deal_title": deal_title,
+        "analysis_json": analysis_json,
         "language": language,
         "channel": channel,
         "tone": tone,
