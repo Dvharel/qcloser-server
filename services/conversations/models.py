@@ -55,6 +55,8 @@ class CallRecording(models.Model):
     followup_json = models.JSONField(null=True, blank=True)
     error_stage = models.CharField(max_length=64, null=True, blank=True)
     error_message = models.TextField(null=True, blank=True)
+    salesperson_email = models.EmailField(blank=True, default="")
+    client_email = models.EmailField(blank=True, default="")
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -75,3 +77,43 @@ class CallRecording(models.Model):
 
     def __str__(self) -> str:
         return f"Call #{self.id} ({self.get_status_display()})"
+
+
+class NotificationDelivery(models.Model):
+    class Kind(models.TextChoices):
+        ANALYSIS = "analysis"
+        FEEDBACK = "feedback"
+        FOLLOWUP = "followup"
+
+    class Channel(models.TextChoices):
+        EMAIL = "email"
+
+    class Status(models.TextChoices):
+        PENDING = "pending"
+        SENDING = "sending"
+        SENT = "sent"
+        FAILED = "failed"
+        SKIPPED = "skipped"
+
+    recording = models.ForeignKey(
+        CallRecording,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    channel = models.CharField(max_length=16, choices=Channel.choices, default=Channel.EMAIL)
+    salesperson_email = models.EmailField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    attempts = models.PositiveIntegerField(default=0)
+    subject = models.CharField(max_length=255, blank=True, default="")
+    body = models.TextField(blank=True, default="")
+    last_error = models.TextField(null=True, blank=True)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Delivery #{self.id} [{self.kind}] → {self.salesperson_email} ({self.status})"

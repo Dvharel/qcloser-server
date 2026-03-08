@@ -13,6 +13,8 @@ class CallRecordingSerializer(serializers.ModelSerializer):
             "deal_title",
             "audio_file",
             "language",
+            "salesperson_email",
+            "client_email",
             "status",
             "transcript",
             "created_at",

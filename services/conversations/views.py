@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError
 from langdetect import detect
 
 
-from .models import CallRecording
+from .models import CallRecording, NotificationDelivery
 from .serializers import CallRecordingSerializer
 from .transcription_service import (
     submit_transcription,
@@ -210,6 +210,20 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         recording.analysis_json = result.get("analysis_json") or result
         recording.status = CallRecording.Status.ANALYZED
         recording.save(update_fields=["analysis_json", "status"])
+
+        if recording.salesperson_email:
+            try:
+                NotificationDelivery.objects.get_or_create(
+                    recording=recording,
+                    kind=NotificationDelivery.Kind.ANALYSIS,
+                    defaults={
+                        "channel": NotificationDelivery.Channel.EMAIL,
+                        "salesperson_email": recording.salesperson_email,
+                        "status": NotificationDelivery.Status.PENDING,
+                    },
+                )
+            except Exception as e:
+                print(f"Failed to create NotificationDelivery for recording {recording.id}: {e}")
 
         return Response(
             CallRecordingSerializer(recording, context={"request": request}).data,
