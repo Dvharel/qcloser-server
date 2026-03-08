@@ -1,15 +1,69 @@
+import logging
+
 from celery import shared_task
+from django.core.mail import send_mail
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import status
 
-from .models import CallRecording
+from .models import CallRecording, NotificationDelivery
 from .transcription_service import poll_transcription, format_speaker_transcript
 from .ai_client import (
     analyze_via_ai_service,
     feedback_via_ai_service,
     generate_followup_via_ai_service,
 )
+from .email_builders import build_analysis_email
+
+logger = logging.getLogger(__name__)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_delivery(self, delivery_id: int):
+    try:
+        delivery = NotificationDelivery.objects.select_related("recording").get(id=delivery_id)
+    except NotificationDelivery.DoesNotExist:
+        return
+
+    if delivery.status == NotificationDelivery.Status.SENT:
+        return
+
+    delivery.status = NotificationDelivery.Status.SENDING
+    delivery.attempts += 1
+    delivery.last_attempt_at = timezone.now()
+    delivery.save(update_fields=["status", "attempts", "last_attempt_at"])
+
+    try:
+        subject, body = build_analysis_email(delivery.recording)
+        delivery.subject = subject
+        delivery.body = body
+        delivery.save(update_fields=["subject", "body"])
+
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=None,  # uses DEFAULT_FROM_EMAIL
+            recipient_list=[delivery.salesperson_email],
+            fail_silently=False,
+        )
+
+        delivery.status = NotificationDelivery.Status.SENT
+        delivery.sent_at = timezone.now()
+        delivery.save(update_fields=["status", "sent_at"])
+
+    except ValueError as exc:
+        # Data problem — retrying won't fix it
+        logger.error("send_delivery [%s]: data error, will not retry — %s", delivery_id, exc)
+        delivery.status = NotificationDelivery.Status.FAILED
+        delivery.last_error = str(exc)
+        delivery.save(update_fields=["status", "last_error"])
+
+    except Exception as exc:
+        logger.error("send_delivery [%s]: transient error, will retry — %s", delivery_id, exc)
+        delivery.status = NotificationDelivery.Status.FAILED
+        delivery.last_error = str(exc)
+        delivery.save(update_fields=["status", "last_error"])
+        raise self.retry(exc=exc)
 
 
 @shared_task(bind=True, max_retries=20, default_retry_delay=10)
@@ -106,13 +160,11 @@ def run_langgraph_pipeline(recording_id: int):
             rec.save(update_fields=["status"])
 
             out = generate_followup_via_ai_service(
-                rec.org_id,
                 recording_id=rec.id,
                 transcript=rec.transcript,
+                deal_title=rec.deal_title,
                 analysis_json=rec.analysis_json,
-                feedback_json=rec.feedback_json,
                 language=rec.language,
-                recording_id=rec.id,
             )
 
             rec.followup_json = out

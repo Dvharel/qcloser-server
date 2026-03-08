@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import viewsets, permissions, status, parsers
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -5,9 +7,9 @@ from rest_framework.exceptions import ValidationError
 
 from langdetect import detect
 
-
 from .models import CallRecording, NotificationDelivery
 from .serializers import CallRecordingSerializer
+from .tasks import send_delivery
 from .transcription_service import (
     submit_transcription,
     poll_transcription,
@@ -20,6 +22,8 @@ from services.conversations.ai_client import (
     generate_followup_via_ai_service,
     feedback_via_ai_service,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CallRecordingViewSet(viewsets.ModelViewSet):
@@ -212,8 +216,9 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         recording.save(update_fields=["analysis_json", "status"])
 
         if recording.salesperson_email:
+            delivery = None
             try:
-                NotificationDelivery.objects.get_or_create(
+                delivery, _ = NotificationDelivery.objects.get_or_create(
                     recording=recording,
                     kind=NotificationDelivery.Kind.ANALYSIS,
                     defaults={
@@ -223,7 +228,18 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
                     },
                 )
             except Exception as e:
-                print(f"Failed to create NotificationDelivery for recording {recording.id}: {e}")
+                logger.error(
+                    "Failed to create NotificationDelivery for recording %s: %s",
+                    recording.id, e,
+                )
+            if delivery is not None:
+                try:
+                    send_delivery.delay(delivery.id)
+                except Exception as e:
+                    logger.error(
+                        "Failed to enqueue send_delivery for delivery %s (recording %s): %s",
+                        delivery.id, recording.id, e,
+                    )
 
         return Response(
             CallRecordingSerializer(recording, context={"request": request}).data,

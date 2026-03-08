@@ -1,3 +1,4 @@
+# Python 3.9+ required — tuple[str, str] annotations used in email_builders.py
 FROM python:3.10-slim
 
 RUN apt-get update && apt-get install -y \
