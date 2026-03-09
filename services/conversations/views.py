@@ -301,6 +301,32 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
         recording.status = CallRecording.Status.FEEDBACK_READY
         recording.save(update_fields=["feedback_json", "status"])
 
+        if recording.salesperson_email:
+            delivery = None
+            try:
+                delivery, _ = NotificationDelivery.objects.get_or_create(
+                    recording=recording,
+                    kind=NotificationDelivery.Kind.FEEDBACK,
+                    defaults={
+                        "channel": NotificationDelivery.Channel.EMAIL,
+                        "salesperson_email": recording.salesperson_email,
+                        "status": NotificationDelivery.Status.PENDING,
+                    },
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to create NotificationDelivery for recording %s: %s",
+                    recording.id, e,
+                )
+            if delivery is not None:
+                try:
+                    send_delivery.delay(delivery.id)
+                except Exception as e:
+                    logger.error(
+                        "Failed to enqueue send_delivery for delivery %s (recording %s): %s",
+                        delivery.id, recording.id, e,
+                    )
+
         return Response(
             CallRecordingSerializer(recording, context={"request": request}).data,
             status=status.HTTP_200_OK,
@@ -357,7 +383,34 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
 
         followup_json = result.get("followup_json") or result.get("followup") or ""
         recording.followup_json = followup_json
-        recording.save(update_fields=["followup_json"])
+        recording.status = CallRecording.Status.FOLLOWUP_READY
+        recording.save(update_fields=["followup_json", "status"])
+
+        if recording.salesperson_email:
+            delivery = None
+            try:
+                delivery, _ = NotificationDelivery.objects.get_or_create(
+                    recording=recording,
+                    kind=NotificationDelivery.Kind.FOLLOWUP,
+                    defaults={
+                        "channel": NotificationDelivery.Channel.EMAIL,
+                        "salesperson_email": recording.salesperson_email,
+                        "status": NotificationDelivery.Status.PENDING,
+                    },
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to create NotificationDelivery for recording %s: %s",
+                    recording.id, e,
+                )
+            if delivery is not None:
+                try:
+                    send_delivery.delay(delivery.id)
+                except Exception as e:
+                    logger.error(
+                        "Failed to enqueue send_delivery for delivery %s (recording %s): %s",
+                        delivery.id, recording.id, e,
+                    )
 
         return Response(
             CallRecordingSerializer(recording, context={"request": request}).data,

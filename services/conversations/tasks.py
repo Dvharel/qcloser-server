@@ -13,7 +13,7 @@ from .ai_client import (
     feedback_via_ai_service,
     generate_followup_via_ai_service,
 )
-from .email_builders import build_analysis_email
+from .email_builders import build_analysis_email, build_feedback_email, build_followup_email
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,15 @@ def send_delivery(self, delivery_id: int):
     delivery.save(update_fields=["status", "attempts", "last_attempt_at"])
 
     try:
-        subject, body = build_analysis_email(delivery.recording)
+        kind = delivery.kind
+        if kind == NotificationDelivery.Kind.ANALYSIS:
+            subject, body = build_analysis_email(delivery.recording)
+        elif kind == NotificationDelivery.Kind.FEEDBACK:
+            subject, body = build_feedback_email(delivery.recording)
+        elif kind == NotificationDelivery.Kind.FOLLOWUP:
+            subject, body = build_followup_email(delivery.recording)
+        else:
+            raise ValueError(f"Unknown delivery kind: {kind}")
         delivery.subject = subject
         delivery.body = body
         delivery.save(update_fields=["subject", "body"])
@@ -147,6 +155,32 @@ def run_langgraph_pipeline(recording_id: int):
             rec.status = CallRecording.Status.FEEDBACK_READY
             rec.save(update_fields=["feedback_json", "status"])
 
+            if rec.salesperson_email:
+                delivery = None
+                try:
+                    delivery, _ = NotificationDelivery.objects.get_or_create(
+                        recording=rec,
+                        kind=NotificationDelivery.Kind.FEEDBACK,
+                        defaults={
+                            "channel": NotificationDelivery.Channel.EMAIL,
+                            "salesperson_email": rec.salesperson_email,
+                            "status": NotificationDelivery.Status.PENDING,
+                        },
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to create NotificationDelivery for recording %s: %s",
+                        rec.id, e,
+                    )
+                if delivery is not None:
+                    try:
+                        send_delivery.delay(delivery.id)
+                    except Exception as e:
+                        logger.error(
+                            "Failed to enqueue send_delivery for delivery %s (recording %s): %s",
+                            delivery.id, rec.id, e,
+                        )
+
         except Exception as e:
             # log error but continue
             rec.error_stage = "feedback"
@@ -169,7 +203,33 @@ def run_langgraph_pipeline(recording_id: int):
 
             rec.followup_json = out
             rec.status = CallRecording.Status.FOLLOWUP_READY
-            rec.save(update_fields=["followup_json"])
+            rec.save(update_fields=["followup_json", "status"])
+
+            if rec.salesperson_email:
+                delivery = None
+                try:
+                    delivery, _ = NotificationDelivery.objects.get_or_create(
+                        recording=rec,
+                        kind=NotificationDelivery.Kind.FOLLOWUP,
+                        defaults={
+                            "channel": NotificationDelivery.Channel.EMAIL,
+                            "salesperson_email": rec.salesperson_email,
+                            "status": NotificationDelivery.Status.PENDING,
+                        },
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to create NotificationDelivery for recording %s: %s",
+                        rec.id, e,
+                    )
+                if delivery is not None:
+                    try:
+                        send_delivery.delay(delivery.id)
+                    except Exception as e:
+                        logger.error(
+                            "Failed to enqueue send_delivery for delivery %s (recording %s): %s",
+                            delivery.id, rec.id, e,
+                        )
 
         except Exception as e:
             rec.status = CallRecording.Status.FAILED
