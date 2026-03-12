@@ -1,6 +1,8 @@
 import os
 import time
 import requests
+import boto3
+from botocore.config import Config
 from django.conf import settings
 
 BASE_URL = getattr(
@@ -37,24 +39,40 @@ def _upload_local_file(file_path: str) -> str:
     return upload_url
 
 
+def _generate_s3_presigned_url(s3_key: str, expiry: int) -> str:
+    """
+    Generate a pre-signed GET URL for a private S3 object.
+    AssemblyAI will use this URL to fetch the audio directly from S3.
+    """
+    client = boto3.client(
+        "s3",
+        region_name=settings.AWS_S3_REGION_NAME,
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        config=Config(signature_version="s3v4"),
+    )
+    return client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.AWS_STORAGE_BUCKET_NAME, "Key": s3_key},
+        ExpiresIn=expiry,
+    )
+
+
 def submit_transcription(recording, language_code=None) -> dict:
     """
     Async step 1: submit a transcription job.
-    - Local disk today: upload to AssemblyAI, then submit using upload_url
-    - MVP later: pass S3 public URL directly and skip upload
+    - S3 mode: generate a pre-signed URL and pass it directly to AssemblyAI.
+    - Local mode: upload file bytes to AssemblyAI, then submit with the upload_url.
     Returns: {"id": "...", "status": "..."}
     """
-    # TODAY: local file path
-    audio_source = recording.audio_file.path
-
-    # Later in the MVP via public URL (S3):
-    # audio_url = recording.audio_file.url
-    # and skip upload.
-
-    upload_url = _upload_local_file(audio_source)
+    if getattr(settings, "USE_S3", False):
+        expiry = getattr(settings, "AWS_S3_PRESIGNED_EXPIRY", 3600)
+        audio_url = _generate_s3_presigned_url(recording.audio_file.name, expiry)
+    else:
+        audio_url = _upload_local_file(recording.audio_file.path)
 
     payload = {
-        "audio_url": upload_url,
+        "audio_url": audio_url,
         "speaker_labels": True,
     }
 

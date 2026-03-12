@@ -132,8 +132,10 @@ USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
-# Static
+# Static / Media
 STATIC_URL = "/static/"
+MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS/CSRF (optional)
@@ -179,9 +181,14 @@ if USE_S3:
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME")
-    AWS_S3_REGION_NAME = os.getenv(
-        "AWS_S3_REGION_NAME", "eu-central-1"
-    )  # e.g. Frankfurt, change if needed
+    AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "eu-central-1")
 
     AWS_S3_ADDRESSING_STYLE = "virtual"
-    AWS_DEFAULT_ACL = None
+    AWS_DEFAULT_ACL = None  # private bucket — no public ACL
+    AWS_S3_FILE_OVERWRITE = False  # never silently overwrite on filename collision
+    AWS_S3_SIGNATURE_VERSION = "s3v4"  # required for most regions
+    AWS_QUERYSTRING_AUTH = True  # .url() returns pre-signed URLs
+    # AWS_QUERYSTRING_EXPIRE controls expiry of pre-signed URLs returned by audio_file.url (serializer responses)
+    AWS_QUERYSTRING_EXPIRE = int(os.getenv("AWS_QUERYSTRING_EXPIRE", "3600"))
+    # AWS_S3_PRESIGNED_EXPIRY controls expiry of pre-signed URLs generated for AssemblyAI transcription submissions
+    AWS_S3_PRESIGNED_EXPIRY = int(os.getenv("AWS_S3_PRESIGNED_EXPIRY", "3600"))
