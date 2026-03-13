@@ -173,6 +173,11 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("1", "true", "yes")
 
+# AWS SES (used when EMAIL_BACKEND=django_ses.SESBackend)
+# AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are read from the environment by boto3 automatically.
+AWS_SES_REGION_NAME = os.getenv("AWS_SES_REGION_NAME", "")
+AWS_SES_REGION_ENDPOINT = f"email.{AWS_SES_REGION_NAME}.amazonaws.com" if AWS_SES_REGION_NAME else ""
+
 USE_S3 = os.getenv("USE_S3", "False").lower() in ("1", "true", "yes")
 
 if USE_S3:

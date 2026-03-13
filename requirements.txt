@@ -38,3 +38,4 @@ djangorestframework-simplejwt==5.3.1
 PyJWT==2.11.0
 langdetect==1.0.9
 gunicorn
+django-ses>=3.5.0,<4.0
