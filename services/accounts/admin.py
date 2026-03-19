@@ -11,14 +11,22 @@ class OrganizationAdmin(admin.ModelAdmin):
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
-    list_display = ("username", "email", "org", "is_staff", "is_active")
+    list_display = ("email", "first_name", "last_name", "org", "is_staff", "is_active")
     list_filter = ("org", "is_staff", "is_superuser", "is_active")
-    search_fields = ("username", "email")
+    search_fields = ("email", "first_name", "last_name")
+    ordering = ("email",)
 
-    fieldsets = DjangoUserAdmin.fieldsets + (
+    fieldsets = (
+        (None, {"fields": ("email", "password")}),
+        ("Personal info", {"fields": ("first_name", "last_name")}),
+        ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        ("Important dates", {"fields": ("last_login", "date_joined")}),
         ("Organization", {"fields": ("org",)}),
     )
 
-    add_fieldsets = DjangoUserAdmin.add_fieldsets + (
-        (None, {"fields": ("org",)}),
+    add_fieldsets = (
+        (None, {
+            "classes": ("wide",),
+            "fields": ("email", "password1", "password2", "org"),
+        }),
     )
