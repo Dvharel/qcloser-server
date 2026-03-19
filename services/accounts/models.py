@@ -20,6 +20,9 @@ class EmailUserManager(BaseUserManager):
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
+        if "org" not in extra_fields and "org_id" not in extra_fields:
+            org, _ = Organization.objects.get_or_create(name="Default")
+            extra_fields["org"] = org
         return self.create_user(email, password, **extra_fields)
 
 
@@ -59,13 +62,9 @@ class User(AbstractUser):
         Organization,
         on_delete=models.CASCADE,
         related_name="users",
-        null=True,
-        blank=True,
     )
 
     # later: role, is_sales_rep, is_manager, etc.
 
     def __str__(self) -> str:
-        if self.org:
-            return f"{self.email} ({self.org.name})"
-        return self.email
+        return f"{self.email} ({self.org.name})"
