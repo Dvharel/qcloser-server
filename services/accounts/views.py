@@ -30,6 +30,8 @@ class OrgUserListCreateView(ListCreateAPIView):
         return UserUpdateSerializer
 
     def get_queryset(self):
+        if not self.request.user or not self.request.user.is_authenticated:
+            return User.objects.none()
         return User.objects.filter(org=self.request.user.org)
 
     def perform_create(self, serializer):
@@ -42,6 +44,8 @@ class OrgUserDetailView(RetrieveUpdateDestroyAPIView):
     http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
+        if not self.request.user or not self.request.user.is_authenticated:
+            return User.objects.none()
         return User.objects.filter(org=self.request.user.org)
 
     def perform_destroy(self, instance):
