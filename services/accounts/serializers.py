@@ -24,6 +24,12 @@ class UserManagementSerializer(serializers.ModelSerializer):
             "last_name": {"default": ""},
         }
 
+    def validate_email(self, value):
+        normalized = User.objects.normalize_email(value)
+        if User.objects.filter(email=normalized).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return normalized
+
     def validate_password(self, value):
         try:
             password_validation.validate_password(value)
@@ -35,6 +41,13 @@ class UserManagementSerializer(serializers.ModelSerializer):
         if "org" not in validated_data:
             raise ValueError("org is required")
         return User.objects.create_user(**validated_data)
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "email", "first_name", "last_name", "is_active"]
+        read_only_fields = ["id", "email", "is_active"]
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
