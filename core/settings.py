@@ -174,6 +174,9 @@ if not DEBUG:
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://q-closer.com")
+PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 3  # 3 days
+
 # Email
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@qcloser.ai")
