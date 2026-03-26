@@ -5,9 +5,9 @@ from django.db import models
 
 class EmailUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
+        email = email.lower().strip() if email else ""
         if not email:
             raise ValueError("Email is required")
-        email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -65,6 +65,10 @@ class User(AbstractUser):
     )
 
     # later: role, is_sales_rep, is_manager, etc.
+
+    def save(self, *args, **kwargs):
+        self.email = self.email.lower().strip()
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.email} ({self.org.name})"

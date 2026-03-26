@@ -25,7 +25,7 @@ class UserManagementSerializer(serializers.ModelSerializer):
         }
 
     def validate_email(self, value):
-        normalized = User.objects.normalize_email(value)
+        normalized = value.lower().strip()
         if User.objects.filter(email=normalized).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return normalized
