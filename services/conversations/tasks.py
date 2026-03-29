@@ -1,7 +1,9 @@
 import logging
 
 from celery import shared_task
+from celery.exceptions import MaxRetriesExceededError
 from django.core.mail import send_mail
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import status
@@ -20,18 +22,29 @@ logger = logging.getLogger(__name__)
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def send_delivery(self, delivery_id: int):
-    try:
-        delivery = NotificationDelivery.objects.select_related("recording").get(id=delivery_id)
-    except NotificationDelivery.DoesNotExist:
-        return
+    with transaction.atomic():
+        try:
+            delivery = (
+                NotificationDelivery.objects
+                .select_for_update(skip_locked=True)
+                .select_related("recording")
+                .filter(
+                    id=delivery_id,
+                    status__in=[
+                        NotificationDelivery.Status.PENDING,
+                        NotificationDelivery.Status.RETRYING,
+                    ],
+                )
+                .get()
+            )
+        except NotificationDelivery.DoesNotExist:
+            # Row is locked by another worker, already SENT/FAILED, or doesn't exist.
+            return
 
-    if delivery.status == NotificationDelivery.Status.SENT:
-        return
-
-    delivery.status = NotificationDelivery.Status.SENDING
-    delivery.attempts += 1
-    delivery.last_attempt_at = timezone.now()
-    delivery.save(update_fields=["status", "attempts", "last_attempt_at"])
+        delivery.status = NotificationDelivery.Status.RETRYING
+        delivery.attempts += 1
+        delivery.last_attempt_at = timezone.now()
+        delivery.save(update_fields=["status", "attempts", "last_attempt_at"])
 
     try:
         kind = delivery.kind
@@ -60,18 +73,23 @@ def send_delivery(self, delivery_id: int):
         delivery.save(update_fields=["status", "sent_at"])
 
     except ValueError as exc:
-        # Data problem — retrying won't fix it
+        # Data problem — retrying won't fix it.
         logger.error("send_delivery [%s]: data error, will not retry — %s", delivery_id, exc)
         delivery.status = NotificationDelivery.Status.FAILED
         delivery.last_error = str(exc)
         delivery.save(update_fields=["status", "last_error"])
 
     except Exception as exc:
+        # Transient error — keep RETRYING so the next attempt can pick it up.
+        # Only mark FAILED once max retries are exhausted.
         logger.error("send_delivery [%s]: transient error, will retry — %s", delivery_id, exc)
-        delivery.status = NotificationDelivery.Status.FAILED
         delivery.last_error = str(exc)
-        delivery.save(update_fields=["status", "last_error"])
-        raise self.retry(exc=exc)
+        delivery.save(update_fields=["last_error"])
+        try:
+            raise self.retry(exc=exc)
+        except MaxRetriesExceededError:
+            delivery.status = NotificationDelivery.Status.FAILED
+            delivery.save(update_fields=["status"])
 
 
 @shared_task(bind=True, max_retries=20, default_retry_delay=10)
