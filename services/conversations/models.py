@@ -93,6 +93,7 @@ class NotificationDelivery(models.Model):
         SENDING = "sending"
         SENT = "sent"
         FAILED = "failed"
+        RETRYING = "retrying"
         SKIPPED = "skipped"
 
     recording = models.ForeignKey(
@@ -114,6 +115,7 @@ class NotificationDelivery(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        unique_together = [("recording", "kind")]
 
     def __str__(self) -> str:
         return f"Delivery #{self.id} [{self.kind}] → {self.salesperson_email} ({self.status})"
