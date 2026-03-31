@@ -19,7 +19,7 @@ class CallRecording(models.Model):
 
     org = models.ForeignKey(
         Organization,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="call_recordings",
     )
     uploaded_by = models.ForeignKey(
