@@ -38,4 +38,5 @@ djangorestframework-simplejwt==5.3.1
 PyJWT==2.11.0
 langdetect==1.0.9
 gunicorn
+whitenoise==6.7.0
 django-ses>=3.5.0,<4.0
