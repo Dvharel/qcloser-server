@@ -9,7 +9,7 @@ from langdetect import detect
 
 from .models import CallRecording, NotificationDelivery
 from .serializers import CallRecordingSerializer
-from .tasks import send_delivery
+from .tasks import send_delivery, poll_transcription_until_done
 from .transcription_service import (
     submit_transcription,
     poll_transcription,
@@ -71,8 +71,16 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
             result = submit_transcription(recording, language_code=language_code)
             recording.transcription_job_id = result["id"]
             recording.save(update_fields=["transcription_job_id"])
+            poll_transcription_until_done.delay(recording.id)
         except Exception as e:
-            print("AssemblyAI submit failed:", e)
+            # BUG 7 fix: was silently printing; now logs properly and marks recording FAILED
+            logger.error(
+                "AssemblyAI submit failed for recording %s: %s", recording.id, e
+            )
+            recording.status = CallRecording.Status.FAILED
+            recording.error_stage = "transcription_submit"
+            recording.error_message = str(e)
+            recording.save(update_fields=["status", "error_stage", "error_message"])
 
     # ---------- TRANSCRIBE ACTION (POST submit, GET poll) ----------
     @action(detail=True, methods=["get"], url_path="transcript")
@@ -382,6 +390,16 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
             )
 
         followup_json = result.get("followup_json") or result.get("followup") or ""
+
+        if not followup_json:
+            return Response(
+                {
+                    "detail": f"FastAPI returned empty followup. Keys: {list(result.keys())}",
+                    "raw": result,
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
         recording.followup_json = followup_json
         recording.status = CallRecording.Status.FOLLOWUP_READY
         recording.save(update_fields=["followup_json", "status"])

@@ -1,16 +1,15 @@
 import logging
 from datetime import timedelta
 
+from langdetect import detect
 from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
 from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.response import Response
-from rest_framework import status
 
 from .models import CallRecording, NotificationDelivery
-from .transcription_service import poll_transcription, format_speaker_transcript
+from .transcription_service import poll_transcription, format_speaker_transcript, AssemblyAIError
 from .ai_client import (
     analyze_via_ai_service,
     feedback_via_ai_service,
@@ -114,17 +113,43 @@ def sweep_stuck_deliveries():
 
 @shared_task(bind=True, max_retries=20, default_retry_delay=10)
 def poll_transcription_until_done(self, recording_id: int):
-    rec = CallRecording.objects.get(id=recording_id)
+    try:
+        rec = CallRecording.objects.get(id=recording_id)
+    except CallRecording.DoesNotExist:
+        logger.warning("Recording %s not found, skipping task", recording_id)
+        return
 
+    # BUG 2 fix: was returning a DRF Response object (meaningless in a Celery task)
     if not rec.transcription_job_id:
-        return Response(
-            {
-                "detail": "Error in poll_transcription_until_done -> No transcript found. Run transcript first."
-            },
-            status=status.HTTP_400_BAD_REQUEST,
+        logger.error(
+            "poll_transcription_until_done [recording %s]: no transcription_job_id, cannot poll",
+            recording_id,
         )
+        rec.status = CallRecording.Status.FAILED
+        rec.error_stage = "transcription"
+        rec.error_message = "No transcription_job_id set — submit step may have failed."
+        rec.save(update_fields=["status", "error_stage", "error_message"])
+        return
 
-    data = poll_transcription(rec.transcription_job_id)
+    # BUG 6 fix: update status to TRANSCRIBING now that we are actively polling
+    if rec.status == CallRecording.Status.WAITING_TRANSCRIPTION:
+        rec.status = CallRecording.Status.TRANSCRIBING
+        rec.save(update_fields=["status"])
+
+    # BUG 3 fix: catch permanent AssemblyAI errors instead of letting them burn through 20 retries
+    try:
+        data = poll_transcription(rec.transcription_job_id)
+    except AssemblyAIError as exc:
+        logger.error(
+            "poll_transcription_until_done [recording %s]: permanent transcription error — %s",
+            recording_id, exc,
+        )
+        rec.status = CallRecording.Status.FAILED
+        rec.error_stage = "transcription"
+        rec.error_message = str(exc)
+        rec.save(update_fields=["status", "error_stage", "error_message"])
+        return
+
     st = data.get("status")
 
     if st in ("queued", "processing"):
@@ -136,12 +161,20 @@ def poll_transcription_until_done(self, recording_id: int):
             format_speaker_transcript(data) or (data.get("text") or "").strip()
         )
         rec.status = CallRecording.Status.TRANSCRIBED
-        rec.save(update_fields=["transcript_json", "transcript", "status"])
+        text = (rec.transcript or "").strip()
+        if text:
+            try:
+                rec.language = "he" if detect(text) == "he" else "en"
+            except Exception:
+                rec.language = "auto"
+        else:
+            rec.language = "auto"
+        rec.save(update_fields=["transcript_json", "transcript", "status", "language"])
 
         run_langgraph_pipeline.delay(rec.id)
         return
 
-    # error case
+    # unexpected status from provider
     rec.status = CallRecording.Status.FAILED
     rec.error_stage = "transcription"
     rec.error_message = str(data)
@@ -150,7 +183,11 @@ def poll_transcription_until_done(self, recording_id: int):
 
 @shared_task
 def run_langgraph_pipeline(recording_id: int):
-    rec = CallRecording.objects.get(id=recording_id)
+    try:
+        rec = CallRecording.objects.get(id=recording_id)
+    except CallRecording.DoesNotExist:
+        logger.warning("Recording %s not found, skipping task", recording_id)
+        return
 
     # -------- ANALYZE (idempotent) --------
     if not rec.analysis_json:
@@ -165,9 +202,35 @@ def run_langgraph_pipeline(recording_id: int):
                 recording_id=rec.id,
             )
 
-            rec.analysis_json = out["analysis_json"]
+            rec.analysis_json = out.get("analysis_json") or out
             rec.status = CallRecording.Status.ANALYZED
             rec.save(update_fields=["analysis_json", "status"])
+
+            if rec.salesperson_email:
+                delivery = None
+                try:
+                    delivery, _ = NotificationDelivery.objects.get_or_create(
+                        recording=rec,
+                        kind=NotificationDelivery.Kind.ANALYSIS,
+                        defaults={
+                            "channel": NotificationDelivery.Channel.EMAIL,
+                            "salesperson_email": rec.salesperson_email,
+                            "status": NotificationDelivery.Status.PENDING,
+                        },
+                    )
+                except Exception as notify_exc:
+                    logger.error(
+                        "Failed to create NotificationDelivery for recording %s: %s",
+                        rec.id, notify_exc,
+                    )
+                if delivery is not None:
+                    try:
+                        send_delivery.delay(delivery.id)
+                    except Exception as notify_exc:
+                        logger.error(
+                            "Failed to enqueue send_delivery for delivery %s (recording %s): %s",
+                            delivery.id, rec.id, notify_exc,
+                        )
 
         except Exception as e:
             rec.status = CallRecording.Status.FAILED
@@ -186,10 +249,11 @@ def run_langgraph_pipeline(recording_id: int):
                 transcript=rec.transcript,
                 analysis_json=rec.analysis_json,
                 language=rec.language,
+                deal_title=rec.deal_title,
                 recording_id=rec.id,
             )
 
-            rec.feedback_json = out["feedback_json"]
+            rec.feedback_json = out.get("feedback_json") or out
             rec.status = CallRecording.Status.FEEDBACK_READY
             rec.save(update_fields=["feedback_json", "status"])
 
@@ -220,7 +284,10 @@ def run_langgraph_pipeline(recording_id: int):
                         )
 
         except Exception as e:
-            # log error but continue
+            logger.error(
+                "run_langgraph_pipeline [recording %s]: feedback failed — %s",
+                recording_id, e,
+            )
             rec.error_stage = "feedback"
             rec.error_message = str(e)
             rec.save(update_fields=["error_stage", "error_message"])
@@ -239,7 +306,7 @@ def run_langgraph_pipeline(recording_id: int):
                 language=rec.language,
             )
 
-            rec.followup_json = out
+            rec.followup_json = out.get("followup_json") or out
             rec.status = CallRecording.Status.FOLLOWUP_READY
             rec.save(update_fields=["followup_json", "status"])
 
