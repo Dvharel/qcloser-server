@@ -162,6 +162,8 @@ CSRF_TRUSTED_ORIGINS = [
     o.strip() for o in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
 ]
 
+CORS_ALLOW_CREDENTIALS = True
+
 # Security hardening for prod
 if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
@@ -181,7 +183,9 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "https://q-closer.com")
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 24 * 3  # 3 days
 
 # Email
-EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@qcloser.ai")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
@@ -192,7 +196,9 @@ EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("1", "true", "yes
 # AWS SES (used when EMAIL_BACKEND=django_ses.SESBackend)
 # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are read from the environment by boto3 automatically.
 AWS_SES_REGION_NAME = os.getenv("AWS_SES_REGION_NAME", "")
-AWS_SES_REGION_ENDPOINT = f"email.{AWS_SES_REGION_NAME}.amazonaws.com" if AWS_SES_REGION_NAME else ""
+AWS_SES_REGION_ENDPOINT = (
+    f"email.{AWS_SES_REGION_NAME}.amazonaws.com" if AWS_SES_REGION_NAME else ""
+)
 
 USE_S3 = os.getenv("USE_S3", "False").lower() in ("1", "true", "yes")
 
