@@ -8,18 +8,30 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from rest_framework import generics
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import ListCreateAPIView, RetrieveAPIView, RetrieveUpdateDestroyAPIView
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .models import User
+from .models import Organization, User
 from .permissions import IsOrgAdmin
-from .serializers import CustomTokenObtainPairSerializer, UserManagementSerializer, UserSerializer, UserUpdateSerializer
+from .serializers import CustomTokenObtainPairSerializer, OrganizationSerializer, UserManagementSerializer, UserSerializer, UserUpdateSerializer
+
 
 logger = logging.getLogger(__name__)
+
+
+class IsSuperUser(BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_superuser)
+
+
+class OrganizationCreateView(generics.CreateAPIView):
+    serializer_class = OrganizationSerializer
+    permission_classes = [IsAuthenticated, IsSuperUser]
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
