@@ -40,6 +40,36 @@ class AuthTestCase(TestCase):
         self.assertIn("refresh", response.data)
         self.assertEqual(response.data["email"], "test@example.com")
         self.assertEqual(response.data["org_id"], self.org.id)
+        self.assertEqual(response.data["role"], "user")
+
+    def test_login_returns_role_admin_for_staff_user(self):
+        User.objects.create_user(
+            email="admin@example.com",
+            password="strongpassword123",
+            org=self.org,
+            is_staff=True,
+        )
+        response = self.client.post(
+            self.token_url,
+            {"email": "admin@example.com", "password": "strongpassword123"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["role"], "admin")
+
+    def test_login_returns_role_superuser_for_superuser(self):
+        User.objects.create_superuser(
+            email="su@example.com",
+            password="strongpassword123",
+            org=self.org,
+        )
+        response = self.client.post(
+            self.token_url,
+            {"email": "su@example.com", "password": "strongpassword123"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["role"], "superuser")
 
     def test_login_wrong_password_returns_401(self):
         response = self.client.post(
@@ -71,6 +101,42 @@ class AuthTestCase(TestCase):
         self.assertEqual(response.data["id"], self.user.id)
         self.assertEqual(response.data["email"], "test@example.com")
         self.assertEqual(response.data["org_id"], self.org.id)
+        self.assertEqual(response.data["role"], "user")
+        self.assertNotIn("is_staff", response.data)
+        self.assertNotIn("is_superuser", response.data)
+
+    def test_me_role_is_admin_for_staff_user(self):
+        admin = User.objects.create_user(
+            email="admin@example.com",
+            password="strongpassword123",
+            org=self.org,
+            is_staff=True,
+        )
+        response = self.client.post(
+            self.token_url,
+            {"email": "admin@example.com", "password": "strongpassword123"},
+            content_type="application/json",
+        )
+        token = response.data["access"]
+        response = self.client.get(self.me_url, HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["role"], "admin")
+
+    def test_me_role_is_superuser_for_superuser(self):
+        su = User.objects.create_superuser(
+            email="su@example.com",
+            password="strongpassword123",
+            org=self.org,
+        )
+        response = self.client.post(
+            self.token_url,
+            {"email": "su@example.com", "password": "strongpassword123"},
+            content_type="application/json",
+        )
+        token = response.data["access"]
+        response = self.client.get(self.me_url, HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["role"], "superuser")
 
     def test_me_with_no_token_returns_401(self):
         response = self.client.get(self.me_url)

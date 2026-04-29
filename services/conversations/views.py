@@ -434,3 +434,69 @@ class CallRecordingViewSet(viewsets.ModelViewSet):
             CallRecordingSerializer(recording, context={"request": request}).data,
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=["post"])
+    def regenerate_followup(self, request, pk=None):
+        """
+        POST /api/recordings/<id>/regenerate_followup/
+
+        Re-runs follow-up generation regardless of current status.
+        Requires feedback_json to be present (feedback must have been run at least once).
+        """
+        recording = self.get_object()
+
+        if not recording.feedback_json:
+            return Response(
+                {"detail": "Cannot regenerate follow-up: feedback has not been generated yet."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not recording.analysis_json:
+            return Response(
+                {"detail": "Cannot regenerate follow-up: analysis is missing."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not recording.transcript:
+            return Response(
+                {"detail": "Cannot regenerate follow-up: transcript is missing."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            result = generate_followup_via_ai_service(
+                recording_id=recording.id,
+                transcript=recording.transcript,
+                deal_title=recording.deal_title,
+                analysis_json=recording.analysis_json,
+                language=getattr(recording, "language", "auto") or "auto",
+                channel=request.data.get("channel", "whatsapp"),
+                tone=request.data.get("tone", "friendly"),
+            )
+        except Exception as e:
+            return Response(
+                {"detail": f"AI service follow-up failed: {e} \n(generate_followup_via_ai_service)"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        followup_json = result.get("followup_json") or result.get("followup") or ""
+
+        if not followup_json:
+            return Response(
+                {
+                    "detail": f"FastAPI returned empty followup. Keys: {list(result.keys())}",
+                    "raw": result,
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        recording.followup_json = followup_json
+        # analysis_json and feedback_json are guaranteed to exist (checked above),
+        # and followup was just generated — the full pipeline is complete.
+        recording.status = CallRecording.Status.DONE
+        recording.save(update_fields=["followup_json", "status"])
+
+        return Response(
+            CallRecordingSerializer(recording, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )

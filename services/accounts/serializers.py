@@ -13,10 +13,19 @@ class OrganizationSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
+
+    def get_role(self, obj):
+        if obj.is_superuser:
+            return "superuser"
+        if obj.is_staff:
+            return "admin"
+        return "user"
+
     class Meta:
         model = User
-        fields = ["id", "email", "org_id", "is_staff", "is_superuser"]
-        read_only_fields = ["id", "email", "org_id", "is_staff", "is_superuser"]
+        fields = ["id", "email", "org_id", "role"]
+        read_only_fields = ["id", "email", "org_id", "role"]
 
 
 class UserManagementSerializer(serializers.ModelSerializer):
@@ -62,4 +71,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         data["email"] = self.user.email
         data["org_id"] = self.user.org_id
+        if self.user.is_superuser:
+            data["role"] = "superuser"
+        elif self.user.is_staff:
+            data["role"] = "admin"
+        else:
+            data["role"] = "user"
         return data
