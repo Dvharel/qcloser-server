@@ -306,7 +306,7 @@ def run_langgraph_pipeline(recording_id: int):
                 language=rec.language,
             )
 
-            rec.followup_json = out.get("followup_json") or out
+            rec.followup_json = out.get("followup_json") or out.get("followup") or out
             rec.status = CallRecording.Status.FOLLOWUP_READY
             rec.save(update_fields=["followup_json", "status"])
 
